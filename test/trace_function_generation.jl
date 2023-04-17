@@ -1,7 +1,6 @@
 using Test
-# using Trace
-
-# Test that the generated trace functions preserve the general functionality
+using TraceIt
+# Test the general functionality
 
 module Test1
     using Test
@@ -105,9 +104,9 @@ for i in 0:5
     run_test_i = Symbol(:run_test_, i)
 
     getproperty(Test1, run_test_i)()
-    Trace.trace(getproperty(Test1, testi))
+    TraceIt.trace(getproperty(Test1, testi))
     getproperty(Test1, run_test_i)()
-    Trace.untrace(getproperty(Test1, testi))
+    TraceIt.untrace(getproperty(Test1, testi))
     getproperty(Test1, run_test_i)()
 end
 
@@ -133,9 +132,9 @@ end
 
 begin
     run_test_0()
-    Trace.trace(A.a)
+    TraceIt.trace(A.a)
     run_test_0()
-    Trace.untrace(A.a)
+    TraceIt.untrace(A.a)
     run_test_0()
 end
 
@@ -158,9 +157,9 @@ end
 
 begin
     run_test_1()
-    Trace.trace(C.yy)
+    TraceIt.trace(C.yy)
     run_test_1()
-    Trace.untrace(C.yy)
+    TraceIt.untrace(C.yy)
     run_test_1()
 end
 
@@ -192,9 +191,9 @@ end
 
 begin
     run_test_2()
-    Trace.trace(D.f0); Trace.trace(D.f1)
+    TraceIt.trace(D.f0); TraceIt.trace(D.f1)
     run_test_2()
-    Trace.untrace(D.f0); Trace.untrace(D.f1)
+    TraceIt.untrace(D.f0); TraceIt.untrace(D.f1)
     run_test_2() 
 end
 
@@ -214,9 +213,9 @@ module O1
 end
 begin
     O1.run_test_0()
-    Trace.trace(O1.f)
+    TraceIt.trace(O1.f)
     O1.run_test_0()
-    Trace.untrace(O1.f)
+    TraceIt.untrace(O1.f)
     O1.run_test_0() 
 end
 
@@ -250,10 +249,37 @@ end
 
 begin
     run_test_5()
-    Trace.trace(X1.f4)
+    TraceIt.trace(X1.f4)
     run_test_5()
-    Trace.untrace(X1.f4)
+    TraceIt.untrace(X1.f4)
     run_test_5() 
+end
+
+# composite types
+module AA
+    using Test
+    abstract type Elem{T} end
+    abstract type FracElem{T} end
+    abstract type PolyElem end
+    struct A1{T} <: Elem{T} end
+    struct A2 <: PolyElem end
+    function csws(a::Elem{S}, b::Elem{S}) where {T<:PolyElem, S<:FracElem{T}}
+        true
+    end
+    function run_test_0()
+        a, b = A1{A2}(), A1{A2}()
+        @test csws(a, b)      
+    end
+end
+
+if false
+    begin
+        run_test_0()
+        TraceIt.trace(AA.csws)
+        run_test_0()
+        TraceIt.untrace(AA.csws)
+        run_test_0() 
+    end
 end
 
 ##############
@@ -290,8 +316,8 @@ end
 
 begin
     run_test_8()
-    Trace.traceall(Test8)
+    TraceIt.traceall(Test8)
     run_test_8() 
-    Trace.untraceall(Test8)
+    TraceIt.untraceall(Test8)
     run_test_8()
 end

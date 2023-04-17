@@ -1,54 +1,69 @@
-module Trace
+module TraceIt
 
-# 
-include("genfun.jl")
+@doc read(joinpath(dirname(@__DIR__), "README.md"), String) TraceIt
 
+# Generate definitions of traced functions 
+include("gentracedfun.jl")
+
+# Method signature --> primary world
 const _method_table = Dict()
+# Method signature --> collected statistics 
 const _record_table = Dict()
-
+# Method key in the tables
 methodkey(name, args) = (name, map(last, args))
 
+"""
+    trace(f)
+
+Registers function `f` for tracing.
+"""
 function trace(f; primary_world=Base.get_world_counter())
-    # Note(Alex): work out the case with extended functions
+    # Redefines each non-ambiguous method of f by evaluating f
+    # in the scope of the parent module and keeping the original signature.
     mod = parentmodule(f)
     ms = collect(methods(f))
     @info "Tracing all ($(length(ms))) methods of $mod.$f"
-    # Redefine each non-ambiguous method of f by evaluating f
-    # in the scope of the parent module and keeping the original signature.
-    # Just in case:
     @assert all(m -> m.primary_world <= primary_world, ms)
+    something_went_wrong = false
     for m in ms
-        name, ts, args = getallargs(m)
+        name, types, args = getmetainfo(m)
         key = methodkey(name, args)
-        # @info "" ts args key
-        tracedfun = genfun(f, name, args, nothing, ts, key, primary_world, true)
-        _record_table[key] = (invoked=0, time=0.0, alloc=0, gctime=0.0)
-        _method_table[key] = (primary_world=primary_world,)
-        @eval mod $tracedfun
+        tracedfun = gentracedfun(f, name, args, types, key, primary_world, true)
+        try 
+            @eval mod $tracedfun
+            _record_table[key] = (invoked=0, time=0.0, alloc=0, gctime=0.0)
+            _method_table[key] = (primary_world=primary_world,)
+        catch e
+            # ignore it for now
+            something_went_wrong = true 
+        end
     end
+    something_went_wrong && (@warn "Unable to trace some of the methods of $f")
     nothing
 end
 
 """
+    untrace(f)
 
+Removes the tracing of function `f`.
 """
 function untrace(f)
+    # Reverts the definition of f for all existing methods
+    # using the primary world stored in _method_table
     mod = parentmodule(f)
     ms = collect(methods(f))
     @info "Un-tracing all ($(length(ms))) methods of $mod.$f"
-    # Revert the definition of f for all existing methods
     for m in ms
-        name, ts, args = getallargs(m)
+        name, types, args = getmetainfo(m)
         key = methodkey(name, args)
-        # @info "" ts args key
         if !haskey(_method_table, key)
-            @warn "Method $name - $key was not traced, skipping it"
+            @warn "Method $name, $args was not traced, skipping it"
             continue
         end
         primary_world = _method_table[key].primary_world 
         delete!(_record_table, key)
         delete!(_method_table, key)
-        untracedfun = genfun(f, name, args, nothing, ts, key, primary_world, false)
+        untracedfun = gentracedfun(f, name, args, types, key, primary_world, false)
         @eval mod $untracedfun
     end
     nothing
@@ -64,9 +79,11 @@ function sprintrow(namewidth::Int, name, widths::Vector{Int}, names; sep=" │ "
 end
 
 """
+    printtrace(io::IO=stdout)
 
+Prints statistics collected from the traced functions to `io`.
 """
-function tprint(io::IO=stdout)
+function printtrace(io::IO=stdout)
     # Group records by function name
     rownames = unique(map(string ∘ first, collect(keys(_record_table))))
     colnames = ["called", "mem, b", "gctime, s", "time, s", "time, %"]
@@ -114,7 +131,6 @@ function tprint(io::IO=stdout)
     colwidths = max.(maxlens, map(length, colnames))
     rownamewidth = max(1, max(length(corner), maximum(map(length, rownames); init=0)))
     header = sprintrow(rownamewidth, rightalign("Func. ╲ Stat.", rownamewidth), colwidths, colnames)
-    # print stuff to io.
     # feature(Alex): also return the array with statistics?
     println(io, header)
     println(io, "─"^(rownamewidth+1), "┼", "─"^(length(header)-rownamewidth-2))
@@ -126,11 +142,11 @@ function tprint(io::IO=stdout)
     nothing
 end
 
-export trace, untrace, tprint
+export trace, untrace, printtrace
 
-# Convenience macro @tr and @untr
+# Convenience macro @trace and @untrace
 include("macro.jl")
-export @tr, @untr
+export @trace, @untrace
 
 # Pure madness
 include("madness.jl")

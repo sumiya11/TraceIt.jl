@@ -1,35 +1,42 @@
 
 """
-    getallargs(m::Base.Method)
+    gentracedfun(f, name, args, _where, key, world, trace)
+
+Returns an expression that contains the definition of a function with name `name`,
+arguments `args`, the where part `_where`. 
+
+The generated function is supposed to do the same things as `f` 
+and be "traced" if `trace` is set.
+"""
+function gentracedfun(f, name, args, _where, key, world, trace)
+    sig = gensig(name, args, _where)
+    body = genbody(f, name, args, key, world, trace)
+    e = Expr(:function)
+    e.args = [sig, body]
+    e
+end
 
 """
-function getallargs(m::Base.Method)
+    getmetainfo(m::Base.Method)
+
+Get the name, the "where {T}" part, and the arguments of `m`.
+"""
+function getmetainfo(m::Base.Method)
     ts, args::Vector{Tuple{String, String}}, _, _ = Base.arg_decl_parts(m)
-    kwargs = Base.kwarg_decl(m)
-    # Discover default values for keyword args 
-    # nkwargs = length(kwargs)
-    # Base.uncompressed_ir(m).code[1]
+    # arguments with empty names get a gensym() as a new name 
     args = map(a -> isempty(first(a)) ? (string(gensym()), last(a)) : a, args)
+    # arguments with empty type declaration get Any as a new type 
     args = map(a -> isempty(last(a)) ? (first(a), "Any") : a, args)
     m.name, ts, args[2:end]
 end
 
 """
-    getsigstr(name, args::Vector{Tuple{String, String}}, ts)
+    gensig(name, args, _where)
 
+Generates the signature of a traced function.
 """
-function getsigstr(name, args::Vector{Tuple{String, String}}, ts)
-    in_parentheses = join(map(a -> join(a, "::"), args), ", ")
-    in_where = "$(join(ts, ","))"
-    Meta.parse(in_parentheses), Meta.parse(in_where)
-end
-
-"""
-    gensig(name, args, kwargs, _where)
-
-"""
-function gensig(name, args, kwargs, _where)
-    sig = gensig(name, args, kwargs)
+function gensig(name, args, _where)
+    sig = gensig(name, args)
     if !isnothing(_where)
         args = map(Meta.parse ∘ string, _where)
         args = [sig, args...]
@@ -37,10 +44,6 @@ function gensig(name, args, kwargs, _where)
         sig.args = args
     end
     sig
-end
-function gensig(name, args, kwargs)
-    @assert isnothing(kwargs)
-    gensig(name, args)
 end
 function gensig(name, args)
     e = Expr(:call)
@@ -92,7 +95,9 @@ end
 end
 
 """
-    genbody(name, args, primary_world, trace)
+    genbody(f, name, args, key, primary_world, trace)
+
+Returns an expression that contains the body of the generated traced function.
 """
 function genbody(f, name, args, key, primary_world, trace)
     if trace
@@ -100,17 +105,5 @@ function genbody(f, name, args, key, primary_world, trace)
     else
         e = genbodyuntrace(f, name, args, key, primary_world)
     end
-    e
-end
-
-"""
-    genfun()
-"""
-function genfun(f, name, args, kwargs, _where, key, world, trace)
-    sig = gensig(name, args, kwargs, _where)
-    @info "" sig
-    body = genbody(f, name, args, key, world, trace)
-    e = Expr(:function)
-    e.args = [sig, body]
     e
 end

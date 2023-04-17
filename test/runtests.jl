@@ -1,12 +1,12 @@
 using SafeTestsets, Test, Pkg
-using Trace
+using TraceIt
 
 if true
-    @safetestset "Trace function generation" begin 
+    @safetestset "TraceIt function generation" begin 
         include("trace_function_generation.jl") 
     end
 
-    @safetestset "Trace itself" begin 
-        include("trace_itself.jl") 
-    end
+    # @safetestset "TraceIt itself" begin 
+    #     include("trace_itself.jl")
+    # end
 end

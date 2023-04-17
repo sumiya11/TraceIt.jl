@@ -1,9 +1,13 @@
+# traceall(mod) -- trace all functions in a module mod at once
 
 function skipname(mod, name, func)
     if name === :eval || name === :include
         return true
     end
     if name === mod
+        return true
+    end
+    if !(func isa Function)
         return true
     end
     # skip macro
